@@ -1,6 +1,5 @@
 import streamlit as st
 import os
-from dotenv import load_dotenv
 import pickle
 from typing import List, Dict, Any
 import json
@@ -19,8 +18,6 @@ from langchain_community.retrievers import BM25Retriever
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import Document
 
-# Load environment variables
-load_dotenv()
 
 class RAGBot:
     def __init__(self, model_type="openai", model_name="gpt-4o"):
@@ -53,7 +50,8 @@ class RAGBot:
             self.llm = ChatOpenAI(
                 model=self.model_name,
                 temperature=0.7,
-                openai_api_key=os.getenv("OPENAI_API_KEY")
+                api_key = st.secrets["OPENAI_API_KEY"]
+
             )
         elif self.model_type == "huggingface":
             # Placeholder for future HuggingFace implementation

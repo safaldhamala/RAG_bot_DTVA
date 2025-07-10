@@ -129,8 +129,10 @@ if user_prompt := st.chat_input("Ask a question about the documents..."):
             # --- 3. GENERATE INITIAL ANSWER ---
             # Create a concise history string for context
             history_window = st.session_state.messages[-(CONVERSATION_HISTORY_TURNS * 2):-1]
-            chat_history_text = "\n".join([f"{msg['role']}: {str(msg['content'].get('answer', msg['content']))}" for msg in history_window])
-            
+            chat_history_text = "\n".join([
+                f"{msg['role']}: {msg['content'].get('answer', msg['content']) if isinstance(msg['content'], dict) else msg['content']}"
+                for msg in history_window
+            ])            
             final_answer_prompt = f"""You are a world-class AI assistant. Review the chat history and the verified context to answer the user's last question.
 {answer_prompt_template}
 

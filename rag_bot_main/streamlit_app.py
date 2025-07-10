@@ -10,7 +10,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.retrievers import BM25Retriever
 
 # --- Page Configuration ---
-st.set_page_config(page_title="Code-Aware RAG Agent", page_icon="👩‍💻", layout="wide")
+st.set_page_config(page_title="DTVA RAG", page_icon="", layout="wide")
 
 # --- Load Secrets ---
 try:

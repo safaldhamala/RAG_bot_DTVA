@@ -3,7 +3,7 @@ import streamlit as st
 import os
 import pickle
 import json
-from dotenv import load_dotenv
+
 
 # LangChain and other core imports
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -16,9 +16,8 @@ from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 # --- Page Configuration ---
 st.set_page_config(page_title="Intelligent RAG Agent", page_icon="🧠", layout="wide")
 
-# --- Load Environment & Constants ---
-load_dotenv()
-openai_api_key = os.getenv("OPENAI_API_KEY")
+
+openai_api_key = st.secrets["OPENAI_API_KEY"]
 if not openai_api_key:
     st.error("OPENAI_API_KEY not found.")
     st.stop()

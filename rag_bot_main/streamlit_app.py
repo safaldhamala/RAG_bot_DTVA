@@ -1,4 +1,4 @@
-# streamlit_app.py (Final Version with Code Quoting)
+# streamlit_app.py (Final Version with Code Quoting AND Confidence Score)
 import streamlit as st
 import os
 import pickle
@@ -35,6 +35,8 @@ def load_components():
         # LLMs
         components["llm"] = ChatOpenAI(model="gpt-4o", temperature=0.1, openai_api_key=openai_api_key)
         components["tool_chooser_llm"] = ChatOpenAI(model="gpt-4o", temperature=0, openai_api_key=openai_api_key, model_kwargs={"response_format": {"type": "json_object"}})
+        # Add the critique LLM back
+        components["critique_llm"] = ChatOpenAI(model="gpt-4o", temperature=0, openai_api_key=openai_api_key, model_kwargs={"response_format": {"type": "json_object"}})
         
         # Retrievers
         embeddings = OpenAIEmbeddings(model="text-embedding-3-small", openai_api_key=openai_api_key)
@@ -54,7 +56,6 @@ def load_components():
 # --- Agent Logic ---
 def choose_tool(user_prompt, chat_history, llm):
     """Uses an LLM to decide which tool to use."""
-    # ... (This function remains exactly the same as the previous version) ...
     prompt = f"""You are an expert routing agent. Your job is to choose the best tool to answer the user's question based on the CHAT HISTORY and the LATEST QUESTION.
 
 You have three tools available:
@@ -86,11 +87,16 @@ components = load_components()
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Hello! I am a code-aware agent for your documents. How can I help?"}]
 
-st.title("👩‍💻 Code-Aware RAG Agent")
+st.title("👩‍💻 Code-Aware RAG Agent with Confidence Scoring")
 
+# Display chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        st.markdown(str(message["content"]), unsafe_allow_html=True)
+        if isinstance(message["content"], dict) and "answer" in message["content"]:
+            st.metric(label="Confidence", value=f"{message['content']['confidence_score']}%", delta=message['content']['justification'], delta_color="off")
+            st.markdown(message["content"]["answer"], unsafe_allow_html=True)
+        else:
+            st.markdown(str(message["content"]), unsafe_allow_html=True)
 
 if user_prompt := st.chat_input("Ask a question..."):
     st.session_state.messages.append({"role": "user", "content": user_prompt})
@@ -101,7 +107,7 @@ if user_prompt := st.chat_input("Ask a question..."):
         with st.spinner("Thinking..."):
             # --- 1. CHOOSE THE TOOL ---
             history_window = st.session_state.messages[-(CONVERSATION_HISTORY_TURNS * 2):-1]
-            chat_history_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in history_window])
+            chat_history_text = "\n".join([f"{msg['role']}: {msg['content'].get('answer', msg['content']) if isinstance(msg['content'], dict) else msg['content']}" for msg in history_window])
             
             tool_name, query_for_tool = choose_tool(user_prompt, chat_history_text, components["tool_chooser_llm"])
             st.info(f"Agent decided to use tool: **`{tool_name}`**")
@@ -117,18 +123,15 @@ if user_prompt := st.chat_input("Ask a question..."):
             elif tool_name == "general_conversation":
                 rag_context = "No retrieval needed for this conversational turn."
 
-            # --- 3. GENERATE FINAL ANSWER WITH CODE QUOTING ---
-            
-            # --- THE CRITICAL PROMPT ENHANCEMENT ---
+            # --- 3. GENERATE INITIAL ANSWER ---
             answer_instruction = ""
             if tool_name == 'code_search':
                 answer_instruction = """First, provide a conceptual explanation based on the context.
 Then, find the single most relevant code snippet from the context that demonstrates this concept and present it in a formatted markdown block under a 'Relevant Code Snippet:' heading."""
-            else: # paper_search or general_conversation
+            else:
                 answer_instruction = "Provide a comprehensive answer based on the provided context and conversation history."
 
             final_answer_prompt = f"""You are a world-class AI assistant and expert programmer. Your goal is to answer the user's question based on the provided information.
-
 **INSTRUCTIONS:**
 {answer_instruction}
 
@@ -140,16 +143,44 @@ CONTEXT FROM THE CHOSEN TOOL ('{tool_name}'):
 {rag_context}
 ---
 User's last question: "{user_prompt}"
-
 **Final Answer:**
 """
-            final_answer = components["llm"].invoke(final_answer_prompt).content
+            initial_answer = components["llm"].invoke(final_answer_prompt).content
             
-        # --- 4. DISPLAY RESULTS ---
-        st.markdown(final_answer, unsafe_allow_html=True)
+            # --- 4. SELF-CRITIQUE FOR CONFIDENCE ---
+            critique_prompt = f"""You are a strict fact-checker. Evaluate an AI's answer based *only* on the provided context.
+- **Task Type:** The AI was answering a '{tool_name}' question.
+- **Score (1-100):** How well is the answer supported by the context?
+- **Justification:** Briefly explain your reasoning.
+Your output MUST be a valid JSON object with "score" and "justification" keys.
+
+CONTEXT PROVIDED TO THE AI:
+{rag_context}
+---
+AI'S GENERATED ANSWER:
+"{initial_answer}"
+---
+JSON:
+"""
+            critique_response = components["critique_llm"].invoke(critique_prompt)
+            try:
+                critique_data = json.loads(critique_response.content.strip())
+                confidence_score = int(critique_data.get("score", 0))
+                justification = str(critique_data.get("justification", "Critique failed."))
+            except (json.JSONDecodeError, TypeError, ValueError):
+                confidence_score = 0
+                justification = "Failed to parse critique."
+
+        # --- 5. DISPLAY RESULTS ---
+        final_answer_data = {"answer": initial_answer, "confidence_score": confidence_score, "justification": justification}
+        
+        st.metric(label="Confidence", value=f"{confidence_score}%", delta=justification, delta_color="off")
+        st.markdown(initial_answer, unsafe_allow_html=True)
+        
         with st.expander("Show Agent's Reasoning"):
             st.info(f"**Tool Selected:** `{tool_name}`")
             st.info(f"**Query Sent to Tool:** `{query_for_tool}`")
             st.text_area("Context Provided to LLM", rag_context, height=300)
 
-    st.session_state.messages.append({"role": "assistant", "content": final_answer})
+    # Store the structured data in session state for consistent display
+    st.session_state.messages.append({"role": "assistant", "content": final_answer_data})

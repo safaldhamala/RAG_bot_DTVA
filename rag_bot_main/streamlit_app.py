@@ -85,7 +85,7 @@ Example: {{"tool": "code_search", "query": "find Python code for SA-AMPPO agent 
 # --- UI & Main App Logic ---
 components = load_components()
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "Hello! I am a code-aware agent for your documents. How can I help?"}]
+    st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help?"}]
 
 st.title("RAG Assistant for the DTVA Project")
 

@@ -180,7 +180,6 @@ JSON:
         with st.expander("Show Agent's Reasoning"):
             st.info(f"**Tool Selected:** `{tool_name}`")
             st.info(f"**Query Sent to Tool:** `{query_for_tool}`")
-            st.text_area("Context Provided to LLM", rag_context, height=300)
 
     # Store the structured data in session state for consistent display
     st.session_state.messages.append({"role": "assistant", "content": final_answer_data})
